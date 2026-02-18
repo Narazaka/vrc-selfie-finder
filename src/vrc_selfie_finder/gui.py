@@ -303,7 +303,7 @@ class VsfGui:
         grid = ft.GridView(
             runs_count=5,
             max_extent=180,
-            child_aspect_ratio=0.75,
+            child_aspect_ratio=0.95,
             spacing=2,
             run_spacing=2,
             expand=True,
@@ -315,10 +315,9 @@ class VsfGui:
                     content=ft.Column([
                         ft.Image(
                             src=img_path,
-                            width=170,
-                            height=130,
                             fit=ft.BoxFit.CONTAIN,
                             border_radius=ft.border_radius.all(2),
+                            expand=True,
                         ),
                         ft.Text(
                             filename,
@@ -327,7 +326,6 @@ class VsfGui:
                             no_wrap=True,
                             overflow=ft.TextOverflow.ELLIPSIS,
                             color=ft.Colors.GREY_700,
-                            width=170,
                         ),
                         ft.Text(
                             f"{score:.4f}",
