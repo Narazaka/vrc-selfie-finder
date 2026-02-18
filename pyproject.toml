@@ -13,7 +13,7 @@ dependencies = [
     "numpy",
     "tqdm",
     "dghs-imgutils>=0.19.0",
-    "onnxruntime-gpu>=1.24.1",
+    "onnxruntime-gpu",
 ]
 
 [project.scripts]
@@ -22,11 +22,20 @@ vpm = "vrchat_picture_manager.cli:main"
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }
 torchvision = { index = "pytorch-cu130" }
+onnxruntime-gpu = { index = "ort-cuda13-nightly" }
 
 [[tool.uv.index]]
 name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
 explicit = true
+
+[[tool.uv.index]]
+name = "ort-cuda13-nightly"
+url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"
+explicit = true
+
+[tool.uv]
+prerelease = "allow"
 
 [build-system]
 requires = ["hatchling"]
