@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import logging
 import os
 import threading
 from pathlib import Path
@@ -17,9 +18,13 @@ class VsfGui:
         self.page.title = "vrc-selfie-finder"
         self.page.window.width = 1100
         self.page.window.height = 750
+        self.page.window.prevent_close = True
 
         self._running = False
+        self._closing = False
         self._result_data: dict[str, list[tuple[str, float]]] = {}  # avatar -> [(path, score)]
+
+        self.page.window.on_event = self._on_window_event
 
         # --- FilePicker (services に登録) ---
         self.file_picker = ft.FilePicker()
@@ -164,6 +169,20 @@ class VsfGui:
 
     # --- ヘルパー ---
 
+    async def _on_window_event(self, e: ft.WindowEvent):
+        if e.type == ft.WindowEventType.CLOSE:
+            self._closing = True
+            self.page.window.prevent_close = False
+            await self.page.window.destroy()
+            os._exit(0)
+
+    def _safe_update(self):
+        if not self._closing:
+            try:
+                self.page.update()
+            except Exception:
+                self._closing = True
+
     def _dir_row(self, field: ft.TextField) -> ft.Row:
         async def on_pick(_e):
             result = await self.file_picker.get_directory_path()
@@ -220,10 +239,14 @@ class VsfGui:
                 self.log_list.controls.pop(0)
 
         def on_log(msg: str):
+            if self._closing:
+                return
             _append_log(msg)
-            self.page.update()
+            self._safe_update()
 
         def on_progress(label: str, current: int, total: int):
+            if self._closing:
+                return
             if total > 0:
                 pct = int(current / total * 100)
                 # 5%刻みでログに表示（大量のログ行を避ける）
@@ -238,22 +261,25 @@ class VsfGui:
                 self.progress_bar.value = None  # indeterminate
                 self.progress_text.value = label
                 _append_log(label)
-            self.page.update()
+            self._safe_update()
 
         def run():
             try:
                 run_pipeline(config, on_progress=on_progress, on_log=on_log)
-                on_log("[完了] 結果を表示します。")
-                self._load_results(config.output_dir)
+                if not self._closing:
+                    on_log("[完了] 結果を表示します。")
+                    self._load_results(config.output_dir)
             except Exception as exc:
-                import traceback
-                on_log(f"[エラー] {exc}")
-                on_log(traceback.format_exc())
+                if not self._closing:
+                    import traceback
+                    on_log(f"[エラー] {exc}")
+                    on_log(traceback.format_exc())
             finally:
                 self._running = False
-                self.run_button.disabled = False
-                self.progress_bar.visible = False
-                self.page.update()
+                if not self._closing:
+                    self.run_button.disabled = False
+                    self.progress_bar.visible = False
+                    self._safe_update()
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -297,7 +323,7 @@ class VsfGui:
             self._result_data[avatar_dir.name] = images
 
         self._rebuild_result_view()
-        self.page.update()
+        self._safe_update()
 
     def _build_grid(self, images: list[tuple[str, float]]) -> ft.GridView:
         grid = ft.GridView(
@@ -374,4 +400,7 @@ class VsfGui:
 
 
 def main():
+    # Windows の asyncio ProactorEventLoop 終了時の ConnectionResetError を抑制
+    logging.getLogger("asyncio").setLevel(logging.CRITICAL)
     ft.app(target=VsfGui)
+    os._exit(0)
