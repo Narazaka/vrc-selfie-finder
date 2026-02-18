@@ -22,9 +22,15 @@ def run_stage1(config: Config, cache: Cache) -> tuple[list[Path], dict[str, dict
         (顔が1つの画像リスト, {パス文字列: {"bbox": [...], "rotation": 0}})
     """
     print("[Stage 1] 写真スキャン中...")
-    all_photos = scan_photos(config.photo_dir, since=config.since)
-    since_msg = f" ({config.since} 以降)" if config.since else ""
-    print(f"  写真数: {len(all_photos)}{since_msg}")
+    all_photos = scan_photos(config.photo_dir, since=config.since, until=config.until)
+    date_msg = ""
+    if config.since and config.until:
+        date_msg = f" ({config.since} 〜 {config.until})"
+    elif config.since:
+        date_msg = f" ({config.since} 以降)"
+    elif config.until:
+        date_msg = f" ({config.until} まで)"
+    print(f"  写真数: {len(all_photos)}{date_msg}")
 
     cache_name = "face_detections_rot" if config.try_rotations else "face_detections"
     face_cache = cache.load(cache_name)

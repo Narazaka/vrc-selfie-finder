@@ -39,6 +39,7 @@ class Config:
 
     # 日付フィルタ (YYYY-MM-DD形式、None で全期間)
     since: str | None = None
+    until: str | None = None
 
     # Stage 1のみ実行
     stage1_only: bool = False

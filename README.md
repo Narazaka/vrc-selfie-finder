@@ -86,6 +86,7 @@ vpm --photo-dir "D:\VRChat\Pictures"
 | `--try-rotations` / `--no-try-rotations` | 有効 | 横倒し画像の回転検出 |
 | `--avatar` | 全アバター | 特定アバターのみ処理 |
 | `--since` | 全期間 | この日付以降の写真のみ処理 (YYYY-MM-DD) |
+| `--until` | 全期間 | この日付以前の写真のみ処理 (YYYY-MM-DD、指定日を含む) |
 | `--stage1-only` | `false` | Stage 1のみ実行 |
 | `--device` | 自動検出 | `cuda` / `cpu` |
 

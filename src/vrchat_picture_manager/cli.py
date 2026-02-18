@@ -68,6 +68,12 @@ def main() -> None:
         help="この日付以降の写真のみ処理 (YYYY-MM-DD形式)",
     )
     parser.add_argument(
+        "--until",
+        type=str,
+        default=None,
+        help="この日付以前の写真のみ処理 (YYYY-MM-DD形式、指定日を含む)",
+    )
+    parser.add_argument(
         "--stage1-only",
         action="store_true",
         help="Stage 1 (顔検出) のみ実行",
@@ -124,6 +130,7 @@ def main() -> None:
         clip_batch_size=args.clip_batch_size,
         target_avatar=args.avatar,
         since=args.since,
+        until=args.until,
         stage1_only=args.stage1_only,
         crop_mode=args.crop_mode,
         crop_padding=args.crop_padding,
