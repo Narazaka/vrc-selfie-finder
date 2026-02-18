@@ -27,8 +27,16 @@ class Config:
     similarity_threshold: float = 0.7
     clip_batch_size: int = 32
 
+    # 顔切り抜きモード: "face" (顔のみ), "wide" (顔周辺を広めに), "full" (画像全体)
+    crop_mode: str = "face"
+    # "wide" モードの拡大率 (bboxの各辺をこの倍率で拡大)
+    crop_padding: float = 0.5
+
     # 処理対象アバター (Noneで全アバター)
     target_avatar: str | None = None
+
+    # 日付フィルタ (YYYY-MM-DD形式、None で全期間)
+    since: str | None = None
 
     # Stage 1のみ実行
     stage1_only: bool = False

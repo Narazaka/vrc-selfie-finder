@@ -14,13 +14,18 @@ from .face_detector import FaceDetector
 from .scanner import scan_photos
 
 
-def run_stage1(config: Config, cache: Cache) -> list[Path]:
-    """Stage 1: 顔が1つだけの画像をフィルタリングする。"""
-    print("[Stage 1] 写真スキャン中...")
-    all_photos = scan_photos(config.photo_dir)
-    print(f"  写真数: {len(all_photos)}")
+def run_stage1(config: Config, cache: Cache) -> tuple[list[Path], dict[str, list[float] | None]]:
+    """Stage 1: 顔が1つだけの画像をフィルタリングする。
 
-    face_cache = cache.load("face_counts")
+    Returns:
+        (顔が1つの画像リスト, {パス文字列: bbox})
+    """
+    print("[Stage 1] 写真スキャン中...")
+    all_photos = scan_photos(config.photo_dir, since=config.since)
+    since_msg = f" ({config.since} 以降)" if config.since else ""
+    print(f"  写真数: {len(all_photos)}{since_msg}")
+
+    face_cache = cache.load("face_detections")
 
     # キャッシュ済みをスキップ
     uncached = [p for p in all_photos if str(p) not in face_cache]
@@ -34,26 +39,39 @@ def run_stage1(config: Config, cache: Cache) -> list[Path]:
             confidence=config.face_confidence_threshold,
         )
 
-        # バッチ処理 + tqdm進捗表示
+        # バッチ処理 + tqdm進捗表示 (バッチごとに追記保存)
         batch_size = config.yolo_batch_size
-        for i in tqdm(range(0, len(uncached), batch_size), desc="顔検出"):
+        pbar = tqdm(total=len(uncached), desc="顔検出", unit="枚")
+        for i in range(0, len(uncached), batch_size):
             batch = uncached[i : i + batch_size]
-            counts = detector.count_faces_batch(batch, batch_size=batch_size)
-            for path, count in zip(batch, counts):
-                face_cache[str(path)] = count
-
-        cache.save("face_counts", face_cache)
+            results = detector.detect_batch(batch, batch_size=batch_size)
+            entries = []
+            for path, result in zip(batch, results):
+                value = {"face_count": result.face_count, "bbox": result.bbox}
+                face_cache[str(path)] = value
+                entries.append((str(path), value))
+            cache.append_batch("face_detections", entries)
+            pbar.update(len(batch))
+        pbar.close()
 
     # 顔が1つだけの画像を抽出
-    single_face = [p for p in all_photos if face_cache.get(str(p)) == 1]
+    single_face = []
+    bbox_map: dict[str, list[float] | None] = {}
+    for p in all_photos:
+        entry = face_cache.get(str(p))
+        if entry is not None and entry["face_count"] == 1:
+            single_face.append(p)
+            bbox_map[str(p)] = entry["bbox"]
+
     print(f"  顔が1つの画像: {len(single_face)} / {len(all_photos)}")
-    return single_face
+    return single_face, bbox_map
 
 
 def run_stage2(
     config: Config,
     cache: Cache,
     candidates: list[Path],
+    bbox_map: dict[str, list[float] | None],
 ) -> None:
     """Stage 2: CLIP類似度で特定アバターを識別し、結果を出力する。"""
     print("[Stage 2] CLIP モデルロード中...")
@@ -81,50 +99,69 @@ def run_stage2(
         avatar_names = [config.target_avatar]
 
     print(f"  対象アバター: {', '.join(avatar_names)}")
+    print(f"  切り抜きモード: {config.crop_mode}")
 
     # 候補画像のCLIP埋め込みを計算 (キャッシュ対応)
-    embeddings_cache_path = config.cache_dir / "clip_embeddings.npz"
-    embedding_index_cache = cache.load("clip_embedding_index")
+    # crop_modeごとに別キャッシュ
+    cache_suffix = f"_{config.crop_mode}"
+    embeddings_npy_path = config.cache_dir / f"clip_embeddings{cache_suffix}.npy"
+    index_cache_name = f"clip_embedding_index{cache_suffix}"
+    embedding_index_cache = cache.load(index_cache_name)
+
+    # 既存の埋め込みキャッシュを読み込み
+    cached_matrix: np.ndarray | None = None
+    if embeddings_npy_path.exists() and embedding_index_cache:
+        cached_matrix = np.load(str(embeddings_npy_path))
 
     candidate_strs = [str(p) for p in candidates]
-    cached_indices = []
-    uncached_indices = []
-    for i, s in enumerate(candidate_strs):
-        if s in embedding_index_cache:
-            cached_indices.append(i)
-        else:
-            uncached_indices.append(i)
+    uncached_indices = [i for i, s in enumerate(candidate_strs) if s not in embedding_index_cache]
 
     print(
         f"  候補画像: {len(candidates)}, "
-        f"未処理: {len(uncached_indices)}, キャッシュ済み: {len(cached_indices)}"
+        f"未処理: {len(uncached_indices)}, キャッシュ済み: {len(candidates) - len(uncached_indices)}"
     )
 
-    # 既存の埋め込みキャッシュを読み込み
-    cached_embeddings: dict[str, np.ndarray] = {}
-    if embeddings_cache_path.exists():
-        with np.load(str(embeddings_cache_path)) as data:
-            for key in data.files:
-                cached_embeddings[key] = data[key]
-
-    # 未処理の画像を処理
+    # 未処理の画像を処理 (バッチごとにキャッシュ保存)
     if uncached_indices:
         print("[Stage 2] 候補画像のCLIP埋め込み計算中...")
         uncached_paths = [candidates[i] for i in uncached_indices]
+        uncached_bboxes = [bbox_map.get(str(p)) for p in uncached_paths]
         batch_size = config.clip_batch_size
-        for i in tqdm(range(0, len(uncached_paths), batch_size), desc="CLIP埋め込み"):
-            batch = uncached_paths[i : i + batch_size]
-            embeddings = matcher.encode_candidates(batch, batch_size=batch_size)
-            for path, emb in zip(batch, embeddings):
-                cached_embeddings[str(path)] = emb
-                embedding_index_cache[str(path)] = True
+        next_idx = cached_matrix.shape[0] if cached_matrix is not None else 0
+        pbar2 = tqdm(total=len(uncached_paths), desc="CLIP埋め込み", unit="枚")
+        for i in range(0, len(uncached_paths), batch_size):
+            batch_paths = uncached_paths[i : i + batch_size]
+            batch_bboxes = uncached_bboxes[i : i + batch_size]
+            embeddings = matcher.encode_candidates(
+                batch_paths,
+                batch_bboxes,
+                crop_mode=config.crop_mode,
+                crop_padding=config.crop_padding,
+                batch_size=batch_size,
+            )
 
-        # 埋め込みキャッシュを保存
-        np.savez(str(embeddings_cache_path), **cached_embeddings)
-        cache.save("clip_embedding_index", embedding_index_cache)
+            # キャッシュ行列に追記
+            if cached_matrix is not None:
+                cached_matrix = np.concatenate([cached_matrix, embeddings], axis=0)
+            else:
+                cached_matrix = embeddings
+
+            # インデックスを更新・追記保存
+            entries = []
+            for path in batch_paths:
+                entries.append((str(path), next_idx))
+                embedding_index_cache[str(path)] = next_idx
+                next_idx += 1
+
+            np.save(str(embeddings_npy_path), cached_matrix)
+            cache.append_batch(index_cache_name, entries)
+
+            pbar2.update(len(batch_paths))
+        pbar2.close()
 
     # 全候補の埋め込み行列を構築
-    all_embeddings = np.stack([cached_embeddings[str(p)] for p in candidates])
+    row_indices = [embedding_index_cache[str(p)] for p in candidates]
+    all_embeddings = cached_matrix[row_indices]
 
     # アバターごとに類似度計算・結果出力
     for avatar_name in avatar_names:
@@ -170,7 +207,7 @@ def run_pipeline(config: Config) -> None:
     """Stage 1→2 のパイプラインを実行する。"""
     cache = Cache(config.cache_dir)
 
-    single_face_photos = run_stage1(config, cache)
+    single_face_photos, bbox_map = run_stage1(config, cache)
 
     if config.stage1_only:
         print("\n[完了] Stage 1 のみ実行しました。")
@@ -180,5 +217,5 @@ def run_pipeline(config: Config) -> None:
         print("\n顔が1つだけの画像が見つかりませんでした。")
         return
 
-    run_stage2(config, cache, single_face_photos)
+    run_stage2(config, cache, single_face_photos, bbox_map)
     print("\n[完了] パイプライン完了。")

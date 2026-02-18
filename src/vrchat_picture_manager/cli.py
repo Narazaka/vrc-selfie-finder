@@ -55,6 +55,12 @@ def main() -> None:
         help="特定アバターのみ処理 (省略時は全アバター)",
     )
     parser.add_argument(
+        "--since",
+        type=str,
+        default=None,
+        help="この日付以降の写真のみ処理 (YYYY-MM-DD形式)",
+    )
+    parser.add_argument(
         "--stage1-only",
         action="store_true",
         help="Stage 1 (顔検出) のみ実行",
@@ -77,6 +83,19 @@ def main() -> None:
         default=32,
         help="CLIPのバッチサイズ",
     )
+    parser.add_argument(
+        "--crop-mode",
+        type=str,
+        choices=["face", "wide", "full"],
+        default="face",
+        help="CLIP比較時の切り抜きモード (face=顔のみ, wide=顔周辺広め, full=画像全体)",
+    )
+    parser.add_argument(
+        "--crop-padding",
+        type=float,
+        default=0.5,
+        help="wide モードでの切り抜き拡大率",
+    )
 
     args = parser.parse_args()
 
@@ -90,7 +109,10 @@ def main() -> None:
         similarity_threshold=args.similarity_threshold,
         clip_batch_size=args.clip_batch_size,
         target_avatar=args.avatar,
+        since=args.since,
         stage1_only=args.stage1_only,
+        crop_mode=args.crop_mode,
+        crop_padding=args.crop_padding,
     )
 
     if args.device:
