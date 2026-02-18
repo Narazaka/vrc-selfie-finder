@@ -1,0 +1,20 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# キャッシュ・出力
+.cache/
+output/
+
+# モデルファイル
+models/*.pt
+
+# リファレンス画像
+reference_images/
