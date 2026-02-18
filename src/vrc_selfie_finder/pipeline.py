@@ -8,11 +8,8 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-from .avatar_matcher import AvatarMatcher
 from .cache import Cache
-from .ccip_matcher import CCIPMatcher
 from .config import Config
-from .face_detector import FaceDetector
 from .scanner import scan_photos
 
 ProgressCallback = Callable[[str, int, int], None]  # (label, current, total)
@@ -51,6 +48,8 @@ def run_stage1(
     _log(f"  未処理: {len(uncached)}, キャッシュ済み: {len(all_photos) - len(uncached)}")
 
     if uncached:
+        from .face_detector import FaceDetector
+
         rot_msg = " (回転検出有効)" if config.try_rotations else ""
         _log(f"[Stage 1] YOLOv8 モデルロード中...{rot_msg}")
         detector = FaceDetector(
@@ -113,6 +112,10 @@ def run_stage2(
     on_log: LogCallback | None = None,
 ) -> None:
     """Stage 2: 類似度で特定アバターを識別し、結果を出力する。"""
+    from .avatar_matcher import AvatarMatcher
+    from .ccip_matcher import CCIPMatcher
+    from .face_detector import FaceDetector
+
     _log = on_log or print
 
     if config.matcher == "ccip":
