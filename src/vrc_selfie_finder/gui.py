@@ -19,6 +19,7 @@ class VsfGui:
         self.page.window.height = 750
 
         self._running = False
+        self._result_data: dict[str, list[tuple[str, float]]] = {}  # avatar -> [(path, score)]
 
         # --- FilePicker (services に登録) ---
         self.file_picker = ft.FilePicker()
@@ -67,9 +68,9 @@ class VsfGui:
             label="切り抜き",
             value="wide",
             options=[
-                ft.dropdown.Option(key="face", text="face"),
-                ft.dropdown.Option(key="wide", text="wide"),
-                ft.dropdown.Option(key="full", text="full"),
+                ft.DropdownOption(key="face", text="face"),
+                ft.DropdownOption(key="wide", text="wide"),
+                ft.DropdownOption(key="full", text="full"),
             ],
             dense=True,
             width=120,
@@ -97,6 +98,25 @@ class VsfGui:
 
         # --- ログ ---
         self.log_list = ft.ListView(expand=True, spacing=2, auto_scroll=True)
+
+        # --- ソート ---
+        self.sort_dropdown = ft.Dropdown(
+            value="name",
+            options=[
+                ft.DropdownOption(key="name", text="名前順"),
+                ft.DropdownOption(key="score", text="スコア順"),
+            ],
+            dense=True,
+            width=110,
+            on_select=self._on_sort_change,
+        )
+        self.sort_order_button = ft.IconButton(
+            icon=ft.Icons.ARROW_UPWARD,
+            tooltip="昇順",
+            on_click=self._on_sort_order_toggle,
+            icon_size=18,
+        )
+        self._sort_ascending = True
 
         # --- 結果 (動的に差し替える) ---
         self.result_container = ft.Container(
@@ -237,79 +257,115 @@ class VsfGui:
 
         threading.Thread(target=run, daemon=True).start()
 
+    # --- ソート ---
+
+    def _on_sort_change(self, _e):
+        self._rebuild_result_view()
+        self.page.update()
+
+    def _on_sort_order_toggle(self, _e):
+        self._sort_ascending = not self._sort_ascending
+        self.sort_order_button.icon = ft.Icons.ARROW_UPWARD if self._sort_ascending else ft.Icons.ARROW_DOWNWARD
+        self.sort_order_button.tooltip = "昇順" if self._sort_ascending else "降順"
+        self._rebuild_result_view()
+        self.page.update()
+
+    def _sorted_images(self, images: list[tuple[str, float]]) -> list[tuple[str, float]]:
+        if self.sort_dropdown.value == "score":
+            return sorted(images, key=lambda x: x[1], reverse=not self._sort_ascending)
+        else:
+            return sorted(images, key=lambda x: Path(x[0]).name, reverse=not self._sort_ascending)
+
     # --- 結果表示 ---
 
     def _load_results(self, output_dir: Path):
         if not output_dir.exists():
             return
 
-        tab_labels: list[ft.Tab] = []
-        tab_views: list[ft.Control] = []
-
+        self._result_data.clear()
         for avatar_dir in sorted(output_dir.iterdir()):
             if not avatar_dir.is_dir():
                 continue
             report_path = avatar_dir / "report.tsv"
             if not report_path.exists():
                 continue
-
             images: list[tuple[str, float]] = []
             with open(report_path, encoding="utf-8") as f:
                 reader = csv.DictReader(f, delimiter="\t")
                 for row in reader:
                     images.append((row["path"], float(row["similarity"])))
+            self._result_data[avatar_dir.name] = images
 
-            grid = ft.GridView(
-                runs_count=5,
-                max_extent=180,
-                child_aspect_ratio=0.85,
-                spacing=2,
-                run_spacing=2,
-                expand=True,
-            )
+        self._rebuild_result_view()
+        self.page.update()
 
-            for img_path, score in images:
-                grid.controls.append(
-                    ft.Container(
-                        content=ft.Column([
-                            ft.Image(
-                                src=img_path,
-                                width=170,
-                                height=136,
-                                fit=ft.BoxFit.CONTAIN,
-                                border_radius=ft.border_radius.all(2),
-                            ),
-                            ft.Text(
-                                f"{score:.4f}",
-                                size=10,
-                                text_align=ft.TextAlign.CENTER,
-                                weight=ft.FontWeight.W_500,
-                            ),
-                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=1),
-                        on_click=lambda _e, p=img_path: self._open_image(p),
-                        ink=True,
-                        border_radius=ft.border_radius.all(4),
-                        padding=2,
-                    )
+    def _build_grid(self, images: list[tuple[str, float]]) -> ft.GridView:
+        grid = ft.GridView(
+            runs_count=5,
+            max_extent=180,
+            child_aspect_ratio=0.75,
+            spacing=2,
+            run_spacing=2,
+            expand=True,
+        )
+        for img_path, score in self._sorted_images(images):
+            filename = Path(img_path).name
+            grid.controls.append(
+                ft.Container(
+                    content=ft.Column([
+                        ft.Image(
+                            src=img_path,
+                            width=170,
+                            height=130,
+                            fit=ft.BoxFit.CONTAIN,
+                            border_radius=ft.border_radius.all(2),
+                        ),
+                        ft.Text(
+                            filename,
+                            size=8,
+                            text_align=ft.TextAlign.CENTER,
+                            no_wrap=True,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                            color=ft.Colors.GREY_700,
+                            width=170,
+                        ),
+                        ft.Text(
+                            f"{score:.4f}",
+                            size=10,
+                            text_align=ft.TextAlign.CENTER,
+                            weight=ft.FontWeight.W_500,
+                        ),
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+                    on_click=lambda _e, p=img_path: self._open_image(p),
+                    ink=True,
+                    border_radius=ft.border_radius.all(4),
+                    padding=2,
                 )
+            )
+        return grid
 
-            label = f"{avatar_dir.name} ({len(images)})"
-            tab_labels.append(ft.Tab(label=label))
-            tab_views.append(grid)
+    def _rebuild_result_view(self):
+        if not self._result_data:
+            self.result_container.content = ft.Text("結果が見つかりません", size=14, color=ft.Colors.GREY)
+            return
 
-        if tab_labels:
-            self.result_container.content = ft.Tabs(
+        tab_labels: list[ft.Tab] = []
+        tab_views: list[ft.Control] = []
+        for avatar_name, images in self._result_data.items():
+            tab_labels.append(ft.Tab(label=f"{avatar_name} ({len(images)})"))
+            tab_views.append(self._build_grid(images))
+
+        self.result_container.content = ft.Column([
+            ft.Row([self.sort_dropdown, self.sort_order_button], spacing=4),
+            ft.Tabs(
                 content=ft.Column([
                     ft.TabBar(tabs=tab_labels),
                     ft.TabBarView(controls=tab_views, expand=True),
                 ]),
                 length=len(tab_labels),
                 expand=True,
-            )
-        else:
-            self.result_container.content = ft.Text("結果が見つかりません", size=14, color=ft.Colors.GREY)
-
-        self.page.update()
+            ),
+        ], spacing=4, expand=True)
 
     @staticmethod
     def _open_image(path: str):
