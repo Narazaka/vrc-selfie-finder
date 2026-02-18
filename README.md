@@ -45,27 +45,29 @@ reference_images/
 
 ## 使い方
 
+プロジェクトルートの `vpm.bat` を使う。PATHに追加すればどこからでも実行可能。
+
 ```bash
 # フルパイプライン (全アバター)
-uv run vpm
+vpm
 
 # 特定アバターのみ
-uv run vpm --avatar avatar_a
+vpm --avatar avatar_a
 
 # Stage 1のみ (顔検出結果の確認)
-uv run vpm --stage1-only
+vpm --stage1-only
 
 # OpenCLIPで実行
-uv run vpm --matcher clip --similarity-threshold 0.85
+vpm --matcher clip --similarity-threshold 0.85
 
 # 類似度閾値を変更
-uv run vpm --similarity-threshold 0.80
+vpm --similarity-threshold 0.80
 
 # 回転検出を無効化
-uv run vpm --no-try-rotations
+vpm --no-try-rotations
 
 # 写真フォルダを指定
-uv run vpm --photo-dir "D:\VRChat\Pictures"
+vpm --photo-dir "D:\VRChat\Pictures"
 ```
 
 ## 主なオプション
