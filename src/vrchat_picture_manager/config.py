@@ -24,11 +24,11 @@ class Config:
     # Stage 2: CLIP類似度
     clip_model_name: str = "ViT-L-14"
     clip_pretrained: str = "laion2b_s32b_b82k"
-    similarity_threshold: float = 0.7
+    similarity_threshold: float = 0.85
     clip_batch_size: int = 32
 
     # 顔切り抜きモード: "face" (顔のみ), "wide" (顔周辺を広めに), "full" (画像全体)
-    crop_mode: str = "face"
+    crop_mode: str = "wide"
     # "wide" モードの拡大率 (bboxの各辺をこの倍率で拡大)
     crop_padding: float = 0.5
 
@@ -42,7 +42,7 @@ class Config:
     stage1_only: bool = False
 
     # 横倒し画像の回転検出を試みる
-    try_rotations: bool = False
+    try_rotations: bool = True
 
     # デバイス
     device: str = field(default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu")

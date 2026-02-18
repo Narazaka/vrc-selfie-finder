@@ -39,7 +39,7 @@ def main() -> None:
     parser.add_argument(
         "--similarity-threshold",
         type=float,
-        default=0.7,
+        default=0.85,
         help="CLIP類似度の閾値",
     )
     parser.add_argument(
@@ -87,7 +87,7 @@ def main() -> None:
         "--crop-mode",
         type=str,
         choices=["face", "wide", "full"],
-        default="face",
+        default="wide",
         help="CLIP比較時の切り抜きモード (face=顔のみ, wide=顔周辺広め, full=画像全体)",
     )
     parser.add_argument(
@@ -98,7 +98,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--try-rotations",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="横倒し画像の回転検出を試みる (90°/180°/270°)",
     )
 
