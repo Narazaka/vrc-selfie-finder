@@ -21,10 +21,12 @@ class Config:
     face_confidence_threshold: float = 0.4
     yolo_batch_size: int = 8
 
-    # Stage 2: CLIP類似度
+    # Stage 2: マッチング
+    matcher: str = "ccip"  # "clip" or "ccip"
     clip_model_name: str = "ViT-L-14"
     clip_pretrained: str = "laion2b_s32b_b82k"
-    similarity_threshold: float = 0.85
+    ccip_model: str = "ccip-caformer_b36-24"
+    similarity_threshold: float = 0.87
     clip_batch_size: int = 32
 
     # 顔切り抜きモード: "face" (顔のみ), "wide" (顔周辺を広めに), "full" (画像全体)

@@ -37,10 +37,17 @@ def main() -> None:
         help="YOLOv8モデルファイルのパス",
     )
     parser.add_argument(
+        "--matcher",
+        type=str,
+        choices=["clip", "ccip"],
+        default="ccip",
+        help="マッチングモデル (clip=OpenCLIP, ccip=アニメキャラ特化CCIP)",
+    )
+    parser.add_argument(
         "--similarity-threshold",
         type=float,
-        default=0.85,
-        help="CLIP類似度の閾値",
+        default=0.87,
+        help="類似度の閾値 (CLIPもCCIPも高い=類似)",
     )
     parser.add_argument(
         "--face-confidence",
@@ -110,6 +117,7 @@ def main() -> None:
         reference_dir=args.reference_dir,
         output_dir=args.output_dir,
         model_path=args.model_path,
+        matcher=args.matcher,
         face_confidence_threshold=args.face_confidence,
         yolo_batch_size=args.yolo_batch_size,
         similarity_threshold=args.similarity_threshold,

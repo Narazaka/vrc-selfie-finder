@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from .avatar_matcher import AvatarMatcher
 from .cache import Cache
+from .ccip_matcher import CCIPMatcher
 from .config import Config
 from .face_detector import FaceDetector
 from .scanner import scan_photos
@@ -83,13 +84,17 @@ def run_stage2(
     candidates: list[Path],
     face_info_map: dict[str, dict],
 ) -> None:
-    """Stage 2: CLIP類似度で特定アバターを識別し、結果を出力する。"""
-    print("[Stage 2] CLIP モデルロード中...")
-    matcher = AvatarMatcher(
-        model_name=config.clip_model_name,
-        pretrained=config.clip_pretrained,
-        device=config.device,
-    )
+    """Stage 2: 類似度で特定アバターを識別し、結果を出力する。"""
+    if config.matcher == "ccip":
+        print(f"[Stage 2] CCIP モデルロード中... ({config.ccip_model})")
+        matcher: AvatarMatcher | CCIPMatcher = CCIPMatcher(model=config.ccip_model)
+    else:
+        print("[Stage 2] CLIP モデルロード中...")
+        matcher = AvatarMatcher(
+            model_name=config.clip_model_name,
+            pretrained=config.clip_pretrained,
+            device=config.device,
+        )
 
     # リファレンス画像にも顔検出+切り抜きを適用するため、検出器を渡す
     face_detector = None
@@ -128,7 +133,8 @@ def run_stage2(
     # 候補画像のCLIP埋め込みを計算 (キャッシュ対応)
     # crop_modeごとに別キャッシュ
     rot_tag = "_rot" if config.try_rotations else ""
-    cache_suffix = f"_{config.crop_mode}{rot_tag}"
+    matcher_tag = f"_{config.matcher}" if config.matcher != "clip" else ""
+    cache_suffix = f"_{config.crop_mode}{rot_tag}{matcher_tag}"
     embeddings_npy_path = config.cache_dir / f"clip_embeddings{cache_suffix}.npy"
     index_cache_name = f"clip_embedding_index{cache_suffix}"
     embedding_index_cache = cache.load(index_cache_name)
