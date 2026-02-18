@@ -2070,7 +2070,7 @@ wheels = [
 ]
 
 [[package]]
-name = "vrchat-picture-manager"
+name = "vrc-selfie-finder"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

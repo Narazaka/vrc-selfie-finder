@@ -1,4 +1,4 @@
-# vrchat-picture-manager
+# vrc-selfie-finder
 
 VRChatの写真フォルダから、特定アバターが1人だけ映っている「自撮り写真」を自動抽出するツール。
 
@@ -45,29 +45,29 @@ reference_images/
 
 ## 使い方
 
-プロジェクトルートの `vpm.bat` を使う。PATHに追加すればどこからでも実行可能。
+プロジェクトルートの `vsf.bat` を使う。PATHに追加すればどこからでも実行可能。
 
 ```bash
 # フルパイプライン (全アバター)
-vpm
+vsf
 
 # 特定アバターのみ
-vpm --avatar avatar_a
+vsf --avatar avatar_a
 
 # Stage 1のみ (顔検出結果の確認)
-vpm --stage1-only
+vsf --stage1-only
 
 # OpenCLIPで実行
-vpm --matcher clip --similarity-threshold 0.85
+vsf --matcher clip --similarity-threshold 0.85
 
 # 類似度閾値を変更
-vpm --similarity-threshold 0.80
+vsf --similarity-threshold 0.80
 
 # 回転検出を無効化
-vpm --no-try-rotations
+vsf --no-try-rotations
 
 # 写真フォルダを指定
-vpm --photo-dir "D:\VRChat\Pictures"
+vsf --photo-dir "D:\VRChat\Pictures"
 ```
 
 ## 主なオプション
