@@ -95,11 +95,20 @@ vsf --photo-dir "D:\VRChat\Pictures"
 デスクトップ GUI で操作することもできる。
 
 ```bash
-# GUI起動
-vsf-gui
-
-# またはバッチファイルから
+# GUI起動 (バッチファイル)
 vsf-gui.bat
+
+# または exe ランチャー (黒窓なし)
+vsf-gui.exe
+```
+
+### exe ランチャーのビルド
+
+`vsf-gui.exe` は黒窓を出さずに GUI を起動するためのランチャー。
+.NET Framework の csc.exe でコンパイルするため追加インストール不要。
+
+```powershell
+.\build-launcher.ps1
 ```
 
 GUI では以下の操作が可能:
