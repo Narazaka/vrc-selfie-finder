@@ -81,10 +81,24 @@ def run_stage2(
         device=config.device,
     )
 
+    # リファレンス画像にも顔検出+切り抜きを適用するため、検出器を渡す
+    face_detector = None
+    if config.crop_mode != "full":
+        print("[Stage 2] リファレンス画像の顔検出中...")
+        face_detector = FaceDetector(
+            model_path=config.model_path,
+            device=config.device,
+            confidence=config.face_confidence_threshold,
+        )
+
     # リファレンス埋め込みを計算
     print("[Stage 2] リファレンス画像の埋め込み計算中...")
     avatar_embeddings = matcher.build_reference_embeddings(
-        config.reference_dir, batch_size=config.clip_batch_size
+        config.reference_dir,
+        face_detector=face_detector,
+        crop_mode=config.crop_mode,
+        crop_padding=config.crop_padding,
+        batch_size=config.clip_batch_size,
     )
     if not avatar_embeddings:
         print("  リファレンス画像が見つかりません。reference_images/ を確認してください。")
