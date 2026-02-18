@@ -41,5 +41,8 @@ class Config:
     # Stage 1のみ実行
     stage1_only: bool = False
 
+    # 横倒し画像の回転検出を試みる
+    try_rotations: bool = False
+
     # デバイス
     device: str = field(default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu")

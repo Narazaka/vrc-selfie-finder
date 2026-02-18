@@ -16,16 +16,37 @@ def _load_image(path: Path) -> Image.Image:
         return Image.open(f).convert("RGB")
 
 
-def crop_face(img: Image.Image, bbox: list[float] | None, mode: str, padding: float = 0.5) -> Image.Image:
+_ROTATION_TO_TRANSPOSE = {
+    90: Image.Transpose.ROTATE_90,    # np.rot90(k=1) = 90°CCW → PIL ROTATE_90も90°CCW
+    180: Image.Transpose.ROTATE_180,
+    270: Image.Transpose.ROTATE_270,  # np.rot90(k=3) = 270°CCW → PIL ROTATE_270も270°CCW
+}
+
+
+def crop_face(
+    img: Image.Image,
+    bbox: list[float] | None,
+    mode: str,
+    padding: float = 0.5,
+    rotation: int = 0,
+) -> Image.Image:
     """バウンディングボックスに基づいて顔を切り抜く。
 
     mode:
         "face" - バウンディングボックスそのまま
         "wide" - padding倍率で拡大 (髪型・服装も含む)
         "full" - 切り抜きなし (元画像をそのまま返す)
+
+    rotation:
+        顔検出時の回転角度 (0, 90, 180, 270)。
+        bboxは回転後の座標系なので、同じ回転を適用してから切り抜く。
     """
     if mode == "full" or bbox is None:
         return img
+
+    # 検出時と同じ回転を適用
+    if rotation in _ROTATION_TO_TRANSPOSE:
+        img = img.transpose(_ROTATION_TO_TRANSPOSE[rotation])
 
     x1, y1, x2, y2 = bbox
     w, h = x2 - x1, y2 - y1
@@ -99,7 +120,10 @@ class AvatarMatcher:
                 for path, result in zip(ref_paths, results):
                     img = _load_image(path)
                     if result.bbox is not None:
-                        img = crop_face(img, result.bbox, mode=crop_mode, padding=crop_padding)
+                        img = crop_face(
+                            img, result.bbox, mode=crop_mode,
+                            padding=crop_padding, rotation=result.rotation,
+                        )
                     pil_images.append(img)
             else:
                 pil_images = [_load_image(p) for p in ref_paths]
@@ -113,15 +137,18 @@ class AvatarMatcher:
         self,
         image_paths: list[Path],
         bboxes: list[list[float] | None],
+        rotations: list[int] | None = None,
         crop_mode: str = "face",
         crop_padding: float = 0.5,
         batch_size: int = 32,
     ) -> np.ndarray:
         """候補画像のCLIP埋め込みを計算する（顔切り抜き対応）。"""
+        if rotations is None:
+            rotations = [0] * len(image_paths)
         pil_images = []
-        for path, bbox in zip(image_paths, bboxes):
+        for path, bbox, rot in zip(image_paths, bboxes, rotations):
             img = _load_image(path)
-            img = crop_face(img, bbox, mode=crop_mode, padding=crop_padding)
+            img = crop_face(img, bbox, mode=crop_mode, padding=crop_padding, rotation=rot)
             pil_images.append(img)
         return self._encode_pil_images(pil_images, batch_size=batch_size)
 

@@ -14,29 +14,32 @@ from .face_detector import FaceDetector
 from .scanner import scan_photos
 
 
-def run_stage1(config: Config, cache: Cache) -> tuple[list[Path], dict[str, list[float] | None]]:
+def run_stage1(config: Config, cache: Cache) -> tuple[list[Path], dict[str, dict]]:
     """Stage 1: 顔が1つだけの画像をフィルタリングする。
 
     Returns:
-        (顔が1つの画像リスト, {パス文字列: bbox})
+        (顔が1つの画像リスト, {パス文字列: {"bbox": [...], "rotation": 0}})
     """
     print("[Stage 1] 写真スキャン中...")
     all_photos = scan_photos(config.photo_dir, since=config.since)
     since_msg = f" ({config.since} 以降)" if config.since else ""
     print(f"  写真数: {len(all_photos)}{since_msg}")
 
-    face_cache = cache.load("face_detections")
+    cache_name = "face_detections_rot" if config.try_rotations else "face_detections"
+    face_cache = cache.load(cache_name)
 
     # キャッシュ済みをスキップ
     uncached = [p for p in all_photos if str(p) not in face_cache]
     print(f"  未処理: {len(uncached)}, キャッシュ済み: {len(all_photos) - len(uncached)}")
 
     if uncached:
-        print("[Stage 1] YOLOv8 顔検出中...")
+        rot_msg = " (回転検出有効)" if config.try_rotations else ""
+        print(f"[Stage 1] YOLOv8 顔検出中...{rot_msg}")
         detector = FaceDetector(
             model_path=config.model_path,
             device=config.device,
             confidence=config.face_confidence_threshold,
+            try_rotations=config.try_rotations,
         )
 
         # バッチ処理 + tqdm進捗表示 (バッチごとに追記保存)
@@ -47,31 +50,38 @@ def run_stage1(config: Config, cache: Cache) -> tuple[list[Path], dict[str, list
             results = detector.detect_batch(batch, batch_size=batch_size)
             entries = []
             for path, result in zip(batch, results):
-                value = {"face_count": result.face_count, "bbox": result.bbox}
+                value = {
+                    "face_count": result.face_count,
+                    "bbox": result.bbox,
+                    "rotation": result.rotation,
+                }
                 face_cache[str(path)] = value
                 entries.append((str(path), value))
-            cache.append_batch("face_detections", entries)
+            cache.append_batch(cache_name, entries)
             pbar.update(len(batch))
         pbar.close()
 
     # 顔が1つだけの画像を抽出
     single_face = []
-    bbox_map: dict[str, list[float] | None] = {}
+    face_info_map: dict[str, dict] = {}
     for p in all_photos:
         entry = face_cache.get(str(p))
         if entry is not None and entry["face_count"] == 1:
             single_face.append(p)
-            bbox_map[str(p)] = entry["bbox"]
+            face_info_map[str(p)] = {
+                "bbox": entry["bbox"],
+                "rotation": entry.get("rotation", 0),
+            }
 
     print(f"  顔が1つの画像: {len(single_face)} / {len(all_photos)}")
-    return single_face, bbox_map
+    return single_face, face_info_map
 
 
 def run_stage2(
     config: Config,
     cache: Cache,
     candidates: list[Path],
-    bbox_map: dict[str, list[float] | None],
+    face_info_map: dict[str, dict],
 ) -> None:
     """Stage 2: CLIP類似度で特定アバターを識別し、結果を出力する。"""
     print("[Stage 2] CLIP モデルロード中...")
@@ -117,7 +127,8 @@ def run_stage2(
 
     # 候補画像のCLIP埋め込みを計算 (キャッシュ対応)
     # crop_modeごとに別キャッシュ
-    cache_suffix = f"_{config.crop_mode}"
+    rot_tag = "_rot" if config.try_rotations else ""
+    cache_suffix = f"_{config.crop_mode}{rot_tag}"
     embeddings_npy_path = config.cache_dir / f"clip_embeddings{cache_suffix}.npy"
     index_cache_name = f"clip_embedding_index{cache_suffix}"
     embedding_index_cache = cache.load(index_cache_name)
@@ -139,16 +150,19 @@ def run_stage2(
     if uncached_indices:
         print("[Stage 2] 候補画像のCLIP埋め込み計算中...")
         uncached_paths = [candidates[i] for i in uncached_indices]
-        uncached_bboxes = [bbox_map.get(str(p)) for p in uncached_paths]
+        uncached_bboxes = [face_info_map[str(p)]["bbox"] for p in uncached_paths]
+        uncached_rotations = [face_info_map[str(p)]["rotation"] for p in uncached_paths]
         batch_size = config.clip_batch_size
         next_idx = cached_matrix.shape[0] if cached_matrix is not None else 0
         pbar2 = tqdm(total=len(uncached_paths), desc="CLIP埋め込み", unit="枚")
         for i in range(0, len(uncached_paths), batch_size):
             batch_paths = uncached_paths[i : i + batch_size]
             batch_bboxes = uncached_bboxes[i : i + batch_size]
+            batch_rotations = uncached_rotations[i : i + batch_size]
             embeddings = matcher.encode_candidates(
                 batch_paths,
                 batch_bboxes,
+                rotations=batch_rotations,
                 crop_mode=config.crop_mode,
                 crop_padding=config.crop_padding,
                 batch_size=batch_size,
@@ -221,7 +235,7 @@ def run_pipeline(config: Config) -> None:
     """Stage 1→2 のパイプラインを実行する。"""
     cache = Cache(config.cache_dir)
 
-    single_face_photos, bbox_map = run_stage1(config, cache)
+    single_face_photos, face_info_map = run_stage1(config, cache)
 
     if config.stage1_only:
         print("\n[完了] Stage 1 のみ実行しました。")
@@ -231,5 +245,5 @@ def run_pipeline(config: Config) -> None:
         print("\n顔が1つだけの画像が見つかりませんでした。")
         return
 
-    run_stage2(config, cache, single_face_photos, bbox_map)
+    run_stage2(config, cache, single_face_photos, face_info_map)
     print("\n[完了] パイプライン完了。")

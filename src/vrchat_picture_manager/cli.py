@@ -96,6 +96,11 @@ def main() -> None:
         default=0.5,
         help="wide モードでの切り抜き拡大率",
     )
+    parser.add_argument(
+        "--try-rotations",
+        action="store_true",
+        help="横倒し画像の回転検出を試みる (90°/180°/270°)",
+    )
 
     args = parser.parse_args()
 
@@ -113,6 +118,7 @@ def main() -> None:
         stage1_only=args.stage1_only,
         crop_mode=args.crop_mode,
         crop_padding=args.crop_padding,
+        try_rotations=args.try_rotations,
     )
 
     if args.device:
