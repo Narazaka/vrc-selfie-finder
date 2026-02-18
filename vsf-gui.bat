@@ -1,0 +1,2 @@
+@echo off
+uv run --project "%~dp0." vsf-gui %*

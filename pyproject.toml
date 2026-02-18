@@ -15,10 +15,12 @@ dependencies = [
     "tqdm",
     "dghs-imgutils>=0.19.0",
     "onnxruntime-gpu",
+    "flet",
 ]
 
 [project.scripts]
 vsf = "vrc_selfie_finder.cli:main"
+vsf-gui = "vrc_selfie_finder.gui:main"
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }

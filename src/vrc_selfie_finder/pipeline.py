@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -14,14 +15,24 @@ from .config import Config
 from .face_detector import FaceDetector
 from .scanner import scan_photos
 
+ProgressCallback = Callable[[str, int, int], None]  # (label, current, total)
+LogCallback = Callable[[str], None]  # (message)
 
-def run_stage1(config: Config, cache: Cache) -> tuple[list[Path], dict[str, dict]]:
+
+def run_stage1(
+    config: Config,
+    cache: Cache,
+    on_progress: ProgressCallback | None = None,
+    on_log: LogCallback | None = None,
+) -> tuple[list[Path], dict[str, dict]]:
     """Stage 1: 顔が1つだけの画像をフィルタリングする。
 
     Returns:
         (顔が1つの画像リスト, {パス文字列: {"bbox": [...], "rotation": 0}})
     """
-    print("[Stage 1] 写真スキャン中...")
+    _log = on_log or print
+
+    _log("[Stage 1] 写真スキャン中...")
     all_photos = scan_photos(config.photo_dir, since=config.since, until=config.until)
     date_msg = ""
     if config.since and config.until:
@@ -30,18 +41,18 @@ def run_stage1(config: Config, cache: Cache) -> tuple[list[Path], dict[str, dict
         date_msg = f" ({config.since} 以降)"
     elif config.until:
         date_msg = f" ({config.until} まで)"
-    print(f"  写真数: {len(all_photos)}{date_msg}")
+    _log(f"  写真数: {len(all_photos)}{date_msg}")
 
     cache_name = "face_detections_rot" if config.try_rotations else "face_detections"
     face_cache = cache.load(cache_name)
 
     # キャッシュ済みをスキップ
     uncached = [p for p in all_photos if str(p) not in face_cache]
-    print(f"  未処理: {len(uncached)}, キャッシュ済み: {len(all_photos) - len(uncached)}")
+    _log(f"  未処理: {len(uncached)}, キャッシュ済み: {len(all_photos) - len(uncached)}")
 
     if uncached:
         rot_msg = " (回転検出有効)" if config.try_rotations else ""
-        print(f"[Stage 1] YOLOv8 顔検出中...{rot_msg}")
+        _log(f"[Stage 1] YOLOv8 顔検出中...{rot_msg}")
         detector = FaceDetector(
             model_path=config.model_path,
             device=config.device,
@@ -49,9 +60,10 @@ def run_stage1(config: Config, cache: Cache) -> tuple[list[Path], dict[str, dict
             try_rotations=config.try_rotations,
         )
 
-        # バッチ処理 + tqdm進捗表示 (バッチごとに追記保存)
+        # バッチ処理 + 進捗表示 (バッチごとに追記保存)
         batch_size = config.yolo_batch_size
-        pbar = tqdm(total=len(uncached), desc="顔検出", unit="枚")
+        processed = 0
+        pbar = None if on_progress else tqdm(total=len(uncached), desc="顔検出", unit="枚")
         for i in range(0, len(uncached), batch_size):
             batch = uncached[i : i + batch_size]
             results = detector.detect_batch(batch, batch_size=batch_size)
@@ -65,8 +77,13 @@ def run_stage1(config: Config, cache: Cache) -> tuple[list[Path], dict[str, dict
                 face_cache[str(path)] = value
                 entries.append((str(path), value))
             cache.append_batch(cache_name, entries)
-            pbar.update(len(batch))
-        pbar.close()
+            processed += len(batch)
+            if on_progress:
+                on_progress("顔検出", processed, len(uncached))
+            else:
+                pbar.update(len(batch))
+        if pbar:
+            pbar.close()
 
     # 顔が1つだけの画像を抽出
     single_face = []
@@ -80,7 +97,7 @@ def run_stage1(config: Config, cache: Cache) -> tuple[list[Path], dict[str, dict
                 "rotation": entry.get("rotation", 0),
             }
 
-    print(f"  顔が1つの画像: {len(single_face)} / {len(all_photos)}")
+    _log(f"  顔が1つの画像: {len(single_face)} / {len(all_photos)}")
     return single_face, face_info_map
 
 
@@ -89,13 +106,17 @@ def run_stage2(
     cache: Cache,
     candidates: list[Path],
     face_info_map: dict[str, dict],
+    on_progress: ProgressCallback | None = None,
+    on_log: LogCallback | None = None,
 ) -> None:
     """Stage 2: 類似度で特定アバターを識別し、結果を出力する。"""
+    _log = on_log or print
+
     if config.matcher == "ccip":
-        print(f"[Stage 2] CCIP モデルロード中... ({config.ccip_model})")
+        _log(f"[Stage 2] CCIP モデルロード中... ({config.ccip_model})")
         matcher: AvatarMatcher | CCIPMatcher = CCIPMatcher(model=config.ccip_model)
     else:
-        print("[Stage 2] CLIP モデルロード中...")
+        _log("[Stage 2] CLIP モデルロード中...")
         matcher = AvatarMatcher(
             model_name=config.clip_model_name,
             pretrained=config.clip_pretrained,
@@ -105,7 +126,7 @@ def run_stage2(
     # リファレンス画像にも顔検出+切り抜きを適用するため、検出器を渡す
     face_detector = None
     if config.crop_mode != "full":
-        print("[Stage 2] リファレンス画像の顔検出中...")
+        _log("[Stage 2] リファレンス画像の顔検出中...")
         face_detector = FaceDetector(
             model_path=config.model_path,
             device=config.device,
@@ -113,7 +134,7 @@ def run_stage2(
         )
 
     # リファレンス埋め込みを計算
-    print("[Stage 2] リファレンス画像の埋め込み計算中...")
+    _log("[Stage 2] リファレンス画像の埋め込み計算中...")
     avatar_embeddings = matcher.build_reference_embeddings(
         config.reference_dir,
         face_detector=face_detector,
@@ -122,19 +143,19 @@ def run_stage2(
         batch_size=config.clip_batch_size,
     )
     if not avatar_embeddings:
-        print("  リファレンス画像が見つかりません。reference_images/ を確認してください。")
+        _log("  リファレンス画像が見つかりません。reference_images/ を確認してください。")
         return
 
     avatar_names = list(avatar_embeddings.keys())
     if config.target_avatar:
         if config.target_avatar not in avatar_names:
-            print(f"  アバター '{config.target_avatar}' が見つかりません。")
-            print(f"  利用可能: {', '.join(avatar_names)}")
+            _log(f"  アバター '{config.target_avatar}' が見つかりません。")
+            _log(f"  利用可能: {', '.join(avatar_names)}")
             return
         avatar_names = [config.target_avatar]
 
-    print(f"  対象アバター: {', '.join(avatar_names)}")
-    print(f"  切り抜きモード: {config.crop_mode}")
+    _log(f"  対象アバター: {', '.join(avatar_names)}")
+    _log(f"  切り抜きモード: {config.crop_mode}")
 
     # 候補画像のCLIP埋め込みを計算 (キャッシュ対応)
     # crop_modeごとに別キャッシュ
@@ -153,20 +174,21 @@ def run_stage2(
     candidate_strs = [str(p) for p in candidates]
     uncached_indices = [i for i, s in enumerate(candidate_strs) if s not in embedding_index_cache]
 
-    print(
+    _log(
         f"  候補画像: {len(candidates)}, "
         f"未処理: {len(uncached_indices)}, キャッシュ済み: {len(candidates) - len(uncached_indices)}"
     )
 
     # 未処理の画像を処理 (バッチごとにキャッシュ保存)
     if uncached_indices:
-        print("[Stage 2] 候補画像のCLIP埋め込み計算中...")
+        _log("[Stage 2] 候補画像の埋め込み計算中...")
         uncached_paths = [candidates[i] for i in uncached_indices]
         uncached_bboxes = [face_info_map[str(p)]["bbox"] for p in uncached_paths]
         uncached_rotations = [face_info_map[str(p)]["rotation"] for p in uncached_paths]
         batch_size = config.clip_batch_size
         next_idx = cached_matrix.shape[0] if cached_matrix is not None else 0
-        pbar2 = tqdm(total=len(uncached_paths), desc="CLIP埋め込み", unit="枚")
+        processed = 0
+        pbar2 = None if on_progress else tqdm(total=len(uncached_paths), desc="埋め込み計算", unit="枚")
         for i in range(0, len(uncached_paths), batch_size):
             batch_paths = uncached_paths[i : i + batch_size]
             batch_bboxes = uncached_bboxes[i : i + batch_size]
@@ -196,8 +218,13 @@ def run_stage2(
             np.save(str(embeddings_npy_path), cached_matrix)
             cache.append_batch(index_cache_name, entries)
 
-            pbar2.update(len(batch_paths))
-        pbar2.close()
+            processed += len(batch_paths)
+            if on_progress:
+                on_progress("埋め込み計算", processed, len(uncached_paths))
+            else:
+                pbar2.update(len(batch_paths))
+        if pbar2:
+            pbar2.close()
 
     # 全候補の埋め込み行列を構築
     row_indices = [embedding_index_cache[str(p)] for p in candidates]
@@ -216,7 +243,7 @@ def run_stage2(
         ]
         matches.sort(key=lambda x: x[1], reverse=True)
 
-        print(f"  [{avatar_name}] マッチ: {len(matches)} 枚 (閾値: {config.similarity_threshold})")
+        _log(f"  [{avatar_name}] マッチ: {len(matches)} 枚 (閾値: {config.similarity_threshold})")
 
         # 出力ディレクトリ作成
         avatar_output = config.output_dir / avatar_name
@@ -240,22 +267,32 @@ def run_stage2(
                 except OSError:
                     pass  # 同名ファイルがある場合はスキップ
 
-        print(f"  [{avatar_name}] 出力: {avatar_output}")
+        _log(f"  [{avatar_name}] 出力: {avatar_output}")
 
 
-def run_pipeline(config: Config) -> None:
+def run_pipeline(
+    config: Config,
+    on_progress: ProgressCallback | None = None,
+    on_log: LogCallback | None = None,
+) -> None:
     """Stage 1→2 のパイプラインを実行する。"""
+    _log = on_log or print
     cache = Cache(config.cache_dir)
 
-    single_face_photos, face_info_map = run_stage1(config, cache)
+    single_face_photos, face_info_map = run_stage1(
+        config, cache, on_progress=on_progress, on_log=on_log
+    )
 
     if config.stage1_only:
-        print("\n[完了] Stage 1 のみ実行しました。")
+        _log("\n[完了] Stage 1 のみ実行しました。")
         return
 
     if not single_face_photos:
-        print("\n顔が1つだけの画像が見つかりませんでした。")
+        _log("\n顔が1つだけの画像が見つかりませんでした。")
         return
 
-    run_stage2(config, cache, single_face_photos, face_info_map)
-    print("\n[完了] パイプライン完了。")
+    run_stage2(
+        config, cache, single_face_photos, face_info_map,
+        on_progress=on_progress, on_log=on_log,
+    )
+    _log("\n[完了] パイプライン完了。")
