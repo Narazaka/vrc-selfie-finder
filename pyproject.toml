@@ -3,6 +3,7 @@ name = "vrc-selfie-finder"
 version = "0.1.0"
 description = "VRChat自撮り写真抽出ツール"
 readme = "README.md"
+license = "Zlib"
 requires-python = ">=3.12"
 dependencies = [
     "ultralytics",
