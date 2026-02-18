@@ -192,15 +192,32 @@ class VsfGui:
 
         config = self._build_config()
 
-        def on_log(msg: str):
+        last_pct = {"value": -1}
+
+        def _append_log(msg: str):
             self.log_list.controls.append(ft.Text(msg, size=11, selectable=True))
             if len(self.log_list.controls) > 500:
                 self.log_list.controls.pop(0)
+
+        def on_log(msg: str):
+            _append_log(msg)
             self.page.update()
 
         def on_progress(label: str, current: int, total: int):
-            self.progress_bar.value = current / total if total > 0 else None
-            self.progress_text.value = f"{label} {current}/{total}"
+            if total > 0:
+                pct = int(current / total * 100)
+                # 5%刻みでログに表示（大量のログ行を避ける）
+                if pct >= last_pct["value"] + 5 or current == total:
+                    last_pct["value"] = pct
+                    _append_log(f"  {label} {current}/{total} ({pct}%)")
+                # プログレスバーも更新を試みる
+                self.progress_bar.value = current / total
+                self.progress_text.value = f"{label} {current}/{total} ({pct}%)"
+            else:
+                last_pct["value"] = -1
+                self.progress_bar.value = None  # indeterminate
+                self.progress_text.value = label
+                _append_log(label)
             self.page.update()
 
         def run():
@@ -209,7 +226,9 @@ class VsfGui:
                 on_log("[完了] 結果を表示します。")
                 self._load_results(config.output_dir)
             except Exception as exc:
+                import traceback
                 on_log(f"[エラー] {exc}")
+                on_log(traceback.format_exc())
             finally:
                 self._running = False
                 self.run_button.disabled = False
@@ -241,11 +260,11 @@ class VsfGui:
                     images.append((row["path"], float(row["similarity"])))
 
             grid = ft.GridView(
-                runs_count=4,
-                max_extent=220,
+                runs_count=5,
+                max_extent=180,
                 child_aspect_ratio=0.85,
-                spacing=6,
-                run_spacing=6,
+                spacing=2,
+                run_spacing=2,
                 expand=True,
             )
 
@@ -255,22 +274,22 @@ class VsfGui:
                         content=ft.Column([
                             ft.Image(
                                 src=img_path,
-                                width=200,
-                                height=160,
-                                fit=ft.BoxFit.COVER,
-                                border_radius=ft.border_radius.all(4),
+                                width=170,
+                                height=136,
+                                fit=ft.BoxFit.CONTAIN,
+                                border_radius=ft.border_radius.all(2),
                             ),
                             ft.Text(
                                 f"{score:.4f}",
-                                size=11,
+                                size=10,
                                 text_align=ft.TextAlign.CENTER,
                                 weight=ft.FontWeight.W_500,
                             ),
-                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
+                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=1),
                         on_click=lambda _e, p=img_path: self._open_image(p),
                         ink=True,
-                        border_radius=ft.border_radius.all(6),
-                        padding=4,
+                        border_radius=ft.border_radius.all(4),
+                        padding=2,
                     )
                 )
 

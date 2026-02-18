@@ -52,7 +52,7 @@ def run_stage1(
 
     if uncached:
         rot_msg = " (回転検出有効)" if config.try_rotations else ""
-        _log(f"[Stage 1] YOLOv8 顔検出中...{rot_msg}")
+        _log(f"[Stage 1] YOLOv8 モデルロード中...{rot_msg}")
         detector = FaceDetector(
             model_path=config.model_path,
             device=config.device,
@@ -62,8 +62,9 @@ def run_stage1(
 
         # バッチ処理 + 進捗表示 (バッチごとに追記保存)
         batch_size = config.yolo_batch_size
-        processed = 0
-        pbar = None if on_progress else tqdm(total=len(uncached), desc="顔検出", unit="枚")
+        done_count = 0
+        total_uncached = len(uncached)
+        pbar = None if on_progress else tqdm(total=total_uncached, desc="顔検出", unit="枚")
         for i in range(0, len(uncached), batch_size):
             batch = uncached[i : i + batch_size]
             results = detector.detect_batch(batch, batch_size=batch_size)
@@ -77,13 +78,15 @@ def run_stage1(
                 face_cache[str(path)] = value
                 entries.append((str(path), value))
             cache.append_batch(cache_name, entries)
-            processed += len(batch)
+            done_count += len(batch)
             if on_progress:
-                on_progress("顔検出", processed, len(uncached))
+                on_progress("[Stage 1] 顔検出", done_count, total_uncached)
             else:
                 pbar.update(len(batch))
         if pbar:
             pbar.close()
+    else:
+        _log("[Stage 1] 顔検出 (全てキャッシュ済み)")
 
     # 顔が1つだけの画像を抽出
     single_face = []
@@ -187,8 +190,9 @@ def run_stage2(
         uncached_rotations = [face_info_map[str(p)]["rotation"] for p in uncached_paths]
         batch_size = config.clip_batch_size
         next_idx = cached_matrix.shape[0] if cached_matrix is not None else 0
-        processed = 0
-        pbar2 = None if on_progress else tqdm(total=len(uncached_paths), desc="埋め込み計算", unit="枚")
+        done_count = 0
+        total_uncached = len(uncached_paths)
+        pbar2 = None if on_progress else tqdm(total=total_uncached, desc="埋め込み計算", unit="枚")
         for i in range(0, len(uncached_paths), batch_size):
             batch_paths = uncached_paths[i : i + batch_size]
             batch_bboxes = uncached_bboxes[i : i + batch_size]
@@ -218,20 +222,23 @@ def run_stage2(
             np.save(str(embeddings_npy_path), cached_matrix)
             cache.append_batch(index_cache_name, entries)
 
-            processed += len(batch_paths)
+            done_count += len(batch_paths)
             if on_progress:
-                on_progress("埋め込み計算", processed, len(uncached_paths))
+                on_progress("[Stage 2] 埋め込み計算", done_count, total_uncached)
             else:
                 pbar2.update(len(batch_paths))
         if pbar2:
             pbar2.close()
+    else:
+        _log("[Stage 2] 埋め込み計算 (全てキャッシュ済み)")
 
     # 全候補の埋め込み行列を構築
     row_indices = [embedding_index_cache[str(p)] for p in candidates]
     all_embeddings = cached_matrix[row_indices]
 
     # アバターごとに類似度計算・結果出力
-    for avatar_name in avatar_names:
+    for ai, avatar_name in enumerate(avatar_names):
+        _log(f"[Stage 2] 類似度計算・結果出力 ({ai + 1}/{len(avatar_names)})")
         ref_emb = avatar_embeddings[avatar_name]
         similarities = matcher.compute_similarities(all_embeddings, ref_emb)
 
