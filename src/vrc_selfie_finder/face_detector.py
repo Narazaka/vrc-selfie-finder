@@ -17,6 +17,9 @@ def _load_image(path: Path) -> np.ndarray | None:
     except OSError as e:
         print(f"  [WARN] 画像読み込みスキップ: {path} ({e})", file=sys.stderr)
         return None
+    except SyntaxError as e:
+        print(f"  [WARN] 画像読み込みエラー: {path} ({e})", file=sys.stderr)
+        return None
 
 
 @dataclass
