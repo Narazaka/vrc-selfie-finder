@@ -245,15 +245,15 @@ def run_stage2(
         ref_emb = avatar_embeddings[avatar_name]
         similarities = matcher.compute_similarities(all_embeddings, ref_emb)
 
-        # 閾値以上の画像を抽出
+        # 閾値範囲でフィルタリング
         matches = [
             (candidates[i], float(similarities[i]))
             for i in range(len(candidates))
-            if similarities[i] >= config.similarity_threshold
+            if config.similarity_threshold_min <= similarities[i] <= config.similarity_threshold_max
         ]
         matches.sort(key=lambda x: x[1], reverse=True)
 
-        _log(f"  [{avatar_name}] マッチ: {len(matches)} 枚 (閾値: {config.similarity_threshold})")
+        _log(f"  [{avatar_name}] マッチ: {len(matches)} 枚 (閾値: {config.similarity_threshold_min} 〜 {config.similarity_threshold_max})")
 
         # 出力ディレクトリ作成
         avatar_output = config.output_dir / avatar_name

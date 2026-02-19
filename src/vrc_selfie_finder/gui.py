@@ -61,13 +61,15 @@ class VsfGui:
             value="ccip",
         )
 
-        self.threshold_slider = ft.Slider(
-            min=0.5, max=1.0, value=0.87, divisions=50,
+        self.threshold_range_slider = ft.RangeSlider(
+            min=0.5, max=1.0, start_value=0.87, end_value=1.0,
+            divisions=50,
             label="{value}",
             on_change=self._on_threshold_change,
             expand=True,
         )
-        self.threshold_text = ft.Text("0.87", size=13, width=40)
+        self.threshold_min_text = ft.Text("0.87", size=13, width=40)
+        self.threshold_max_text = ft.Text("1.00", size=13, width=40)
 
         self.crop_dropdown = ft.Dropdown(
             label="切り抜き",
@@ -140,7 +142,7 @@ class VsfGui:
                 ft.Divider(height=8),
                 ft.Text("マッチャー", size=12),
                 self.matcher_radio,
-                ft.Row([ft.Text("閾値", size=12), self.threshold_slider, self.threshold_text]),
+                ft.Row([ft.Text("閾値", size=12), self.threshold_min_text, self.threshold_range_slider, self.threshold_max_text]),
                 ft.Row([self.crop_dropdown, self.rotation_checkbox]),
                 ft.Row([self.since_field, self.until_field]),
                 ft.Container(height=8),
@@ -200,7 +202,8 @@ class VsfGui:
         ], spacing=0)
 
     def _on_threshold_change(self, _e):
-        self.threshold_text.value = f"{self.threshold_slider.value:.2f}"
+        self.threshold_min_text.value = f"{self.threshold_range_slider.start_value:.2f}"
+        self.threshold_max_text.value = f"{self.threshold_range_slider.end_value:.2f}"
         self.page.update()
 
     # --- 実行 ---
@@ -211,7 +214,8 @@ class VsfGui:
             reference_dir=Path(self.reference_dir_field.value),
             output_dir=Path(self.output_dir_field.value),
             matcher=self.matcher_radio.value,
-            similarity_threshold=round(self.threshold_slider.value, 2),
+            similarity_threshold_min=round(self.threshold_range_slider.start_value, 2),
+            similarity_threshold_max=round(self.threshold_range_slider.end_value, 2),
             crop_mode=self.crop_dropdown.value,
             try_rotations=self.rotation_checkbox.value,
             since=self.since_field.value or None,

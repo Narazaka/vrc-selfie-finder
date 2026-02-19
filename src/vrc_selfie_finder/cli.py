@@ -44,10 +44,16 @@ def main() -> None:
         help="マッチングモデル (clip=OpenCLIP, ccip=アニメキャラ特化CCIP)",
     )
     parser.add_argument(
-        "--similarity-threshold",
+        "--threshold-min",
         type=float,
         default=0.87,
-        help="類似度の閾値 (CLIPもCCIPも高い=類似)",
+        help="類似度の下限閾値",
+    )
+    parser.add_argument(
+        "--threshold-max",
+        type=float,
+        default=1.0,
+        help="類似度の上限閾値",
     )
     parser.add_argument(
         "--face-confidence",
@@ -126,7 +132,8 @@ def main() -> None:
         matcher=args.matcher,
         face_confidence_threshold=args.face_confidence,
         yolo_batch_size=args.yolo_batch_size,
-        similarity_threshold=args.similarity_threshold,
+        similarity_threshold_min=args.threshold_min,
+        similarity_threshold_max=args.threshold_max,
         clip_batch_size=args.clip_batch_size,
         target_avatar=args.avatar,
         since=args.since,
