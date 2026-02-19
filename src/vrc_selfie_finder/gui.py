@@ -231,7 +231,7 @@ class VsfGui:
 
         config = self._build_config()
 
-        last_pct = {"value": -1}
+        last_pct = {"value": -1, "label": ""}
 
         def _append_log(msg: str):
             self.log_list.controls.append(ft.Text(msg, size=11, selectable=True))
@@ -247,6 +247,9 @@ class VsfGui:
         def on_progress(label: str, current: int, total: int):
             if self._closing:
                 return
+            if label != last_pct["label"]:
+                last_pct["value"] = -1
+                last_pct["label"] = label
             if total > 0:
                 pct = int(current / total * 100)
                 # 5%刻みでログに表示（大量のログ行を避ける）
