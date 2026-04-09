@@ -349,7 +349,7 @@ wheels = [
 
 [[package]]
 name = "flet"
-version = "0.82.3.dev7950"
+version = "0.83.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx", marker = "platform_system != 'Pyodide'" },
@@ -357,9 +357,9 @@ dependencies = [
     { name = "oauthlib", marker = "platform_system != 'Pyodide'" },
     { name = "repath" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/8f/af60d1802cdb74d21dbd7b6fdff9484cce2a4838c33d2b748ec1faa85a57/flet-0.82.3.dev7950.tar.gz", hash = "sha256:161d977d3fed520b34bfe4cabb9314b8969f15016fcdc0452f5e3c128a8b9b3e", size = 473863, upload-time = "2026-03-26T15:48:57.7Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/11/d7/102d2a3fafafd37b6c6f7a28a0a71ee9209085734faa138ff36dc3806ff9/flet-0.83.1.tar.gz", hash = "sha256:75115db74674ace37abe6642f84f3cbb6d8c7ab77ccfe2a62547003bd3b27e14", size = 474044, upload-time = "2026-03-29T18:24:51.618Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bf/35/9e037b8bb13fa0fa949cb16b2d80c22cc4e70199c2fbcbba1bc3e8c6a92b/flet-0.82.3.dev7950-py3-none-any.whl", hash = "sha256:b96073e6821809a96e862d8bc8c8d75125efd6f617245b8e6f75fca18ea4fec6", size = 561379, upload-time = "2026-03-26T15:48:55.992Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/20/ac67c2d17d1e23570178c663caac98db9a08b966981282258c4977ac0ef9/flet-0.83.1-py3-none-any.whl", hash = "sha256:fcea71fe39a025c54eb913fea1b09ff608702e8ab05d71fec37aff793d9b8439", size = 561413, upload-time = "2026-03-29T18:24:52.942Z" },
 ]
 
 [[package]]
@@ -1425,11 +1425,11 @@ wheels = [
 
 [[package]]
 name = "pygments"
-version = "2.19.2"
+version = "2.20.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b0/77/a5b8c569bf593b0140bde72ea885a803b82086995367bf2037de0159d924/pygments-2.19.2.tar.gz", hash = "sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887", size = 4968631, upload-time = "2025-06-21T13:39:12.283Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/b2/bc9c9196916376152d655522fdcebac55e66de6603a76a02bca1b6414f6c/pygments-2.20.0.tar.gz", hash = "sha256:6757cd03768053ff99f3039c1a36d6c0aa0b263438fcab17520b30a303a82b5f", size = 4955991, upload-time = "2026-03-29T13:29:33.898Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b", size = 1225217, upload-time = "2025-06-21T13:39:07.939Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/7e/a72dd26f3b0f4f2bf1dd8923c85f7ceb43172af56d63c7383eb62b332364/pygments-2.20.0-py3-none-any.whl", hash = "sha256:81a9e26dd42fd28a23a2d169d86d7ac03b46e2f8b59ed4698fb4785f946d0176", size = 1231151, upload-time = "2026-03-29T13:29:30.038Z" },
 ]
 
 [[package]]
